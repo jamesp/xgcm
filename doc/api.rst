@@ -17,5 +17,5 @@ Utilities
 
 Helper functions.
 
-.. automodule:: mdsxray
+.. automodule:: mdsxarray
     :members:

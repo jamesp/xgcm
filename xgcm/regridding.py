@@ -3,7 +3,7 @@ from __future__ import print_function, division
 
 import warnings
 import numpy as np
-import xray
+import xarray
 
 # this automatically converts dask arrays to numpy
 # use with caution
@@ -27,7 +27,7 @@ def regrid_vertical(qdarr, trdarr, trlevs, dim):
         except KeyError:
             pass
     coords[trcoord_name] = trcoord
-    return xray.DataArray(qtr, coords, dims)
+    return xarray.DataArray(qtr, coords, dims)
 
 
 # numpy version

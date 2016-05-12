@@ -1,6 +1,6 @@
 import numpy as np
-from xray import Dataset, DataArray
-#from xray.core.ops import allclose_or_equiv
+from xarray import Dataset, DataArray
+#from xarray.core.ops import allclose_or_equiv
 from xgcm import GCMDataset
 import pytest
 

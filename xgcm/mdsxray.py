@@ -11,10 +11,10 @@ import numpy as np
 
 import dask.array as da
 
-import xray
-from xray import Variable
-from xray import backends #.common import AbstractDataStore
-from xray import core
+import xarray
+from xarray import Variable
+from xarray import backends #.common import AbstractDataStore
+from xarray import core
 #core.utils.NDArrayMixin
 #core.pycompat.OrderedDict
 #core.indexing.NumpyIndexingAdapter
@@ -37,7 +37,7 @@ _endian_lookup = {'=': 'native',
 # the variable metadata will be stored in dicts of the form
 #_variable[varname] = (dimensions, description, units)
 
-_grid_variables = xray.core.pycompat.OrderedDict(
+_grid_variables = xarray.core.pycompat.OrderedDict(
     # horizontal grid
     X=   (('X',), "X-coordinate of cell center", "meters"),
     Y=   (('Y',), "Y-coordinate of cell center", "meters"),
@@ -102,7 +102,7 @@ _grid_special_mapping = {
     'HFacS': ('hFacS', 3*(slice(None),), 3),
 }
 
-_state_variables = xray.core.pycompat.OrderedDict(
+_state_variables = xarray.core.pycompat.OrderedDict(
     # state
     U=  (('Z','Y','Xp1'), 'Zonal Component of Velocity', 'm/s'),
     V=  (('Z','Yp1','X'), 'Meridional Component of Velocity', 'm/s'),
@@ -375,7 +375,7 @@ def _read_mds(fname, iternum=None, use_mmap=True,
         return out
 
 
-class MDSArrayWrapper(xray.core.utils.NDArrayMixin):
+class MDSArrayWrapper(xarray.core.utils.NDArrayMixin):
     def __init__(self, array):
         self.array = array
 
@@ -416,7 +416,7 @@ def _get_layers_grid_variables(dirname):
 
 
 #class MemmapArrayWrapper(NumpyIndexingAdapter):
-class MemmapArrayWrapper(xray.core.utils.NDArrayMixin):
+class MemmapArrayWrapper(xarray.core.utils.NDArrayMixin):
     def __init__(self, memmap_array):
         self._memmap_array = memmap_array
 
@@ -442,13 +442,13 @@ def open_mdsdataset(dirname, iters=None, deltaT=1,
                  prefix=None, ref_date=None, calendar=None,
                  ignore_pickup=True, geometry='Cartesian',
                  grid_vars_to_coords=True):
-    """Open MITgcm-style mds file output as xray datset."""
+    """Open MITgcm-style mds file output as xarray datset."""
 
     store = _MDSDataStore(dirname, iters, deltaT,
                              prefix, ref_date, calendar,
                              ignore_pickup, geometry)
     # turn all the auxilliary grid variables into coordinates
-    ds = xray.Dataset.load_store(store)
+    ds = xarray.Dataset.load_store(store)
     if grid_vars_to_coords:
         for k in _grid_variables:
             ds.set_coords(k, inplace=True)
@@ -474,8 +474,8 @@ class _MDSDataStore(backends.common.AbstractDataStore):
         self.dirname = dirname
 
         # storage dicts for variables and attributes
-        self._variables = xray.core.pycompat.OrderedDict()
-        self._attributes = xray.core.pycompat.OrderedDict()
+        self._variables = xarray.core.pycompat.OrderedDict()
+        self._attributes = xarray.core.pycompat.OrderedDict()
         self._dimensions = []
 
         ### figure out the mapping between diagnostics names and variable properties
@@ -530,7 +530,7 @@ class _MDSDataStore(backends.common.AbstractDataStore):
 
             varnames = []
             fnames = []
-            _data_vars = xray.core.pycompat.OrderedDict()
+            _data_vars = xarray.core.pycompat.OrderedDict()
             # look at first iter to get variable metadata
             for f in glob(os.path.join(dirname, '*.%010d.meta' % iters[0])):
                 if ignore_pickup and re.search('pickup', f):

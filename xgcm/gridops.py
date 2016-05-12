@@ -3,7 +3,7 @@ from __future__ import print_function, division
 
 # make some functions for taking divergence
 from dask import array as da
-import xray
+import xarray
 import numpy as np
 
 def _append_to_name(array, append):
@@ -11,6 +11,7 @@ def _append_to_name(array, append):
         return array.name + "_" + append
     except TypeError:
         return append
+
 
 class GCMDataset(object):
     """Representation of GCM (General Circulation Model) output data, numerical
@@ -27,7 +28,7 @@ class GCMDataset(object):
 
         Parameters
         ----------
-        ds : xray Dataset
+        ds : xarray Dataset
         """
 
         # check that needed variables are present
@@ -68,7 +69,7 @@ class GCMDataset(object):
 
         Parameters
         ----------
-        array : xray DataArray
+        array : xarray DataArray
             The array to difference. Must have the coordinate zp1.
         fill_value : number, optional
             The value to be used at the bottom point.
@@ -79,7 +80,7 @@ class GCMDataset(object):
 
         Returns
         -------
-        padded : xray DataArray
+        padded : xarray DataArray
             Padded array with vertical coordinate zp1.
         """
         coords, dims = self._get_coords_from_dims(array.dims)
@@ -95,11 +96,11 @@ class GCMDataset(object):
             chunks = list(array.data.chunks)
             chunks[zdim] = (1,)
             zarr = fill_value * da.ones(shape, dtype=array.dtype, chunks=chunks)
-            zeros = xray.DataArray(zarr, coords, dims).chunk()
+            zeros = xarray.DataArray(zarr, coords, dims).chunk()
         else:
             zarr = np.zeros(shape, array.dtype)
-            zeros = xray.DataArray(zarr, coords, dims)
-        newarray = xray.concat([array, zeros], dim=zlname).rename({zlname: zp1name})
+            zeros = xarray.DataArray(zarr, coords, dims)
+        newarray = xarray.concat([array, zeros], dim=zlname).rename({zlname: zp1name})
         if newarray.chunks:
             # this assumes that there was only one chunk in the vertical to begin with
             # how can we do that better
@@ -113,7 +114,7 @@ class GCMDataset(object):
 
         Parameters
         ----------
-        array : xray DataArray
+        array : xarray DataArray
             The array to difference. Must have the coordinate zp1.
         zname : str, optional
             The variable name for the z point
@@ -122,7 +123,7 @@ class GCMDataset(object):
 
         Returns
         -------
-        diff : xray DataArray
+        diff : xarray DataArray
             A new array with vertical coordinate z.
         """
         a_up = array.isel(**{zp1name: slice(None,-1)})
@@ -130,7 +131,7 @@ class GCMDataset(object):
         a_diff = a_up.data - a_dn.data
         # dimensions and coords of new array
         coords, dims = self._get_coords_from_dims(array.dims, replace={zp1name:zname})
-        return xray.DataArray(a_diff, coords, dims,
+        return xarray.DataArray(a_diff, coords, dims,
                               name=_append_to_name(array, 'diff_zp1_to_z'))
 
     def diff_zl_to_z(self, array, fill_value=0.):
@@ -140,7 +141,7 @@ class GCMDataset(object):
 
         Parameters
         ----------
-        array : xray DataArray
+        array : xarray DataArray
             The array to difference. Must have the coordinate zl.
         fill_value : number, optional
             The value to be used at the bottom point. The default (0) is the
@@ -148,7 +149,7 @@ class GCMDataset(object):
 
         Returns
         -------
-        diff : xray DataArray
+        diff : xarray DataArray
             A new array with vertical coordinate z.
         """
         array_zp1 = self.pad_zl_to_zp1(array, fill_value)
@@ -161,12 +162,12 @@ class GCMDataset(object):
 
         Parameters
         ----------
-        array : xray DataArray
+        array : xarray DataArray
             The array to difference. Must have the coordinate z.
 
         Returns
         -------
-        diff : xray DataArray
+        diff : xarray DataArray
             A new array with vertical coordinate zp1.
         """
         a_up = array.isel(Z=slice(None,-1))
@@ -176,7 +177,7 @@ class GCMDataset(object):
         coords, dims = self._get_coords_from_dims(array.dims, replace={'Z':'Zp1'})
         # trim vertical
         coords['Zp1'] = coords['Zp1'][1:-1]
-        return xray.DataArray(a_diff, coords, dims,
+        return xarray.DataArray(a_diff, coords, dims,
                               name=_append_to_name(array, 'diff_z_to_zp1'))
 
     def derivative_zp1_to_z(self, array):
@@ -185,12 +186,12 @@ class GCMDataset(object):
 
         Parameters
         ----------
-        array : xray DataArray
+        array : xarray DataArray
             The array to differentiate. Must have the coordinate zp1.
 
         Returns
         -------
-        deriv : xray DataArray
+        deriv : xarray DataArray
             A new array with vertical coordinate z.
         """
         a_diff = self.diff_zp1_to_z(array)
@@ -204,7 +205,7 @@ class GCMDataset(object):
 
         Parameters
         ----------
-        array : xray DataArray
+        array : xarray DataArray
             The array to differentiate. Must have the coordinate zl.
         fill_value : number, optional
             The assumed value at the bottom point. The default (0) is the
@@ -212,7 +213,7 @@ class GCMDataset(object):
 
         Returns
         -------
-        deriv : xray DataArray
+        deriv : xarray DataArray
             A new array with vertical coordinate z.
         """
 
@@ -226,12 +227,12 @@ class GCMDataset(object):
 
         Parameters
         ----------
-        array : xray DataArray
+        array : xarray DataArray
             The array to differentiate. Must have the coordinate z.
 
         Returns
         -------
-        diff : xray DataArray
+        diff : xarray DataArray
             A new array with vertical coordinate zp1.
         """
         a_diff = self.diff_z_to_zp1(array)
@@ -241,7 +242,7 @@ class GCMDataset(object):
     ### Vertical Integrals ###
     # if the array to integrate is 1D or 2D, don't multiply by hFac
     # but what if it is 3D, how do we decide what to do?
-    # what if points are missing? xray should take care of that
+    # what if points are missing? xarray should take care of that
     # how do we pick which hFac to use? look at dims
     def integrate_z(self, array, average=False):
         """Integrate ``array`` in vertical dimension, accounting for vertical
@@ -249,14 +250,14 @@ class GCMDataset(object):
 
         Parameters
         ----------
-        array : xray DataArray
+        array : xarray DataArray
             The array to integrate. Must have the dimension Z.
         average : bool, optional
             If ``True``, return an average instead of an integral.
 
         Returns
         -------
-        integral : xray DataArray
+        integral : xarray DataArray
             The vertical integral of ``array``.
         """
         if not 'Z' in array.dims:
@@ -276,12 +277,12 @@ class GCMDataset(object):
     ### Horizontal Differences, Derivatives, and Interpolation ###
 
     # doesn't actually need parent ds
-    # this could go in xray
+    # this could go in xarray
     def roll(self, array, n, dim):
-        """Clone of numpy.roll for xray DataArrays."""
+        """Clone of numpy.roll for xarray DataArrays."""
         left = array.isel(**{dim:slice(None,-n)})
         right = array.isel(**{dim:slice(-n,None)})
-        return xray.concat([right, left], dim=dim)
+        return xarray.concat([right, left], dim=dim)
 
     def diff_xp1_to_x(self, array):
         """Difference DataArray ``array`` in the x direction.
@@ -292,7 +293,7 @@ class GCMDataset(object):
             right = right.chunk(array.chunks)
         diff = right.data - left.data
         coords, dims = self._get_coords_from_dims(array.dims, replace={'Xp1':'X'})
-        return xray.DataArray(diff, coords, dims
+        return xarray.DataArray(diff, coords, dims
                         ).rename(_append_to_name(array, 'diff_xp1_to_x'))
 
     def diff_yp1_to_y(self, array):
@@ -304,5 +305,5 @@ class GCMDataset(object):
             right = right.chunk(array.chunks)
         diff = right.data - left.data
         coords, dims = self._get_coords_from_dims(array.dims, replace={'Yp1':'Y'})
-        return xray.DataArray(diff, coords, dims
+        return xarray.DataArray(diff, coords, dims
                         ).rename(_append_to_name(array, '_diff_yp1_to_y'))
