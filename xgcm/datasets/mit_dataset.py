@@ -1,67 +1,19 @@
-# python 3 compatiblity
-from __future__ import print_function, division
-
-# make some functions for taking divergence
-from dask import array as da
+from .gcm_dataset import GCMDataset
+from xgcm.util import append_to_name
 import xarray
-import numpy as np
 
-def _append_to_name(array, append):
-    try:
-        return array.name + "_" + append
-    except TypeError:
-        return append
-
-
-class GCMDataset(object):
-    """Representation of GCM (General Circulation Model) output data, numerical
-    grid information, and operations related to finite-volume analysis.
-    """
-
+class MITDataset(GCMDataset):
     # without these variables in the dataset, can't function
     needed_vars = ['Z', 'Zp1', 'Zl', 'Zu', 'X', 'Xp1', 'Y', 'Yp1',
                    'XC', 'YC', 'XG', 'YG',
                    'drF', 'drC', 'dxC', 'dxG', 'dyC', 'dyG']
 
-    def __init__(self, ds):
-        """Initialize GCM object.
+    _vertical_coords = {'Z', 'Zp1', 'Zl', 'Zu'}
+    _horiz_coords = {'X', 'Xp1', 'Y', 'Yp1',
+                    'XC', 'YC', 'XG', 'YG',
+                    'drF', 'drC', 'dxC', 'dxG', 'dyC', 'dyG'}
 
-        Parameters
-        ----------
-        ds : xarray Dataset
-        """
 
-        # check that needed variables are present
-        for v in self.needed_vars:
-            if v not in ds:
-                raise KeyError('Needed variable %s not found in dataset' % v)
-
-        self.ds = ds
-
-    # silly functions
-
-    def _get_coords_from_dims(self, dims, replace=None):
-        """Utility function for quickly fetching coordinates from parent
-        dataset.
-        """
-        dims = list(dims)
-        if replace:
-            for k in replace:
-                dims[dims.index(k)] = replace[k]
-        return {dim: self.ds[dim] for dim in dims}, dims
-
-    def _get_hfac_for_array(self, array):
-        """Figure out the correct hfac given array dimensions."""
-        hfac = None
-        if 'X' in array.dims and 'Y' in array.dims and 'HFacC' in self.ds:
-            hfac = self.ds.HFacC
-        if 'Xp1' in array.dims and 'Y' in array.dims and 'HFacW' in self.ds:
-            hfac = self.ds.HFacW
-        if 'X' in array.dims and 'Yp1' in array.dims and 'HFacW' in self.ds:
-            hfac = self.ds.HFacS
-        return hfac
-
-    ### Vertical Differences, Derivatives, and Interpolation ###
 
     def pad_zl_to_zp1(self, array, fill_value=0., zlname='Zl', zp1name='Zp1'):
         """Pad an array located at zl points such that it is located at
@@ -83,30 +35,7 @@ class GCMDataset(object):
         padded : xarray DataArray
             Padded array with vertical coordinate zp1.
         """
-        coords, dims = self._get_coords_from_dims(array.dims)
-        zdim = dims.index(zlname)
-        # shape of the new array to concat at the bottom
-        shape = list(array.shape)
-        shape[zdim] = 1
-        # replace Zl with the bottom level
-        coords[zlname] = np.atleast_1d(self.ds[zp1name][-1].data)
-        # an array of zeros at the bottom
-        # need different behavior for numpy vs dask
-        if array.chunks:
-            chunks = list(array.data.chunks)
-            chunks[zdim] = (1,)
-            zarr = fill_value * da.ones(shape, dtype=array.dtype, chunks=chunks)
-            zeros = xarray.DataArray(zarr, coords, dims).chunk()
-        else:
-            zarr = np.zeros(shape, array.dtype)
-            zeros = xarray.DataArray(zarr, coords, dims)
-        newarray = xarray.concat([array, zeros], dim=zlname).rename({zlname: zp1name})
-        if newarray.chunks:
-            # this assumes that there was only one chunk in the vertical to begin with
-            # how can we do that better
-            return newarray.chunk({zp1name: len(newarray[zp1name])})
-        else:
-            return newarray
+        return self.pad_vertical(array, new_coord=zp1name)
 
     def diff_zp1_to_z(self, array, zname='Z', zp1name='Zp1'):
         """Take the vertical difference of an array located at zp1 points, resulting
@@ -132,7 +61,7 @@ class GCMDataset(object):
         # dimensions and coords of new array
         coords, dims = self._get_coords_from_dims(array.dims, replace={zp1name:zname})
         return xarray.DataArray(a_diff, coords, dims,
-                              name=_append_to_name(array, 'diff_zp1_to_z'))
+                              name=append_to_name(array, 'diff_zp1_to_z'))
 
     def diff_zl_to_z(self, array, fill_value=0.):
         """Take the vertical difference of an array located at zl points, resulting
@@ -154,7 +83,7 @@ class GCMDataset(object):
         """
         array_zp1 = self.pad_zl_to_zp1(array, fill_value)
         array_diff = self.diff_zp1_to_z(array_zp1)
-        return array_diff.rename(_append_to_name(array, '_diff_zl_to_z'))
+        return array_diff.rename(append_to_name(array, '_diff_zl_to_z'))
 
     def diff_z_to_zp1(self, array):
         """Take the vertical difference of an array located at z points, resulting
@@ -178,7 +107,7 @@ class GCMDataset(object):
         # trim vertical
         coords['Zp1'] = coords['Zp1'][1:-1]
         return xarray.DataArray(a_diff, coords, dims,
-                              name=_append_to_name(array, 'diff_z_to_zp1'))
+                              name=append_to_name(array, 'diff_z_to_zp1'))
 
     def derivative_zp1_to_z(self, array):
         """Take the vertical derivative of an array located at zp1 points, resulting
@@ -294,7 +223,7 @@ class GCMDataset(object):
         diff = right.data - left.data
         coords, dims = self._get_coords_from_dims(array.dims, replace={'Xp1':'X'})
         return xarray.DataArray(diff, coords, dims
-                        ).rename(_append_to_name(array, 'diff_xp1_to_x'))
+                        ).rename(append_to_name(array, 'diff_xp1_to_x'))
 
     def diff_yp1_to_y(self, array):
         """Difference DataArray ``array`` in the y direction.
@@ -306,4 +235,4 @@ class GCMDataset(object):
         diff = right.data - left.data
         coords, dims = self._get_coords_from_dims(array.dims, replace={'Yp1':'Y'})
         return xarray.DataArray(diff, coords, dims
-                        ).rename(_append_to_name(array, '_diff_yp1_to_y'))
+                        ).rename(append_to_name(array, '_diff_yp1_to_y'))
