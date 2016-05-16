@@ -5,6 +5,7 @@ from __future__ import print_function, division
 from dask import array as da
 import xarray
 import numpy as np
+from . import manifests
 
 def _append_to_name(array, append):
     try:
@@ -17,15 +18,12 @@ class GCMDataset(object):
     """Representation of GCM (General Circulation Model) output data, numerical
     grid information, and operations related to finite-volume analysis.
     """
-
-    _coord_map = {}  # override this in model specific subclass
-    _x_coords = set()
+    _coord_map = {}
     _y_coords = set()
+    _x_coords = set()
     _z_coords = set()
-    _x_periodic = False
 
-
-    def __init__(self, ds):
+    def __init__(self, ds, manifest=None):
         """Initialize GCM object.
 
         Parameters
@@ -34,45 +32,31 @@ class GCMDataset(object):
             A template dataset to determine coordinates in use.
         """
 
-        # check that needed variables are present
-        for v in self.needed_vars:
-            if v not in ds:
-                raise KeyError('Needed variable %s not found in dataset' % v)
+
+        # if manifest is not given, see if we can work it out from metadata
+        if manifest is None:
+            title = ds.attrs.get('title', None)
+            if title:
+                if title.startswith('FMS Model results'):
+                    manifest = manifests.gfdl
+            # TODO more ways of auto-detecting which model was used
+        if manifest is None:
+            raise ValueError("No manifest given, and it can't be determined from the template file.")
+        self.manifest = manifest.copy()
 
         self.ds = ds
-
-        for k, v in self._coord_map.items():
-            if k.startswith('x'):
-                self._x_coords.add(v)
-            elif k.startswith('y'):
-                self._y_coords.add(v)
-            elif k.startswith('z'):
-                self._z_coords.add(v)
-
         self.coords = ds.coords.to_dataset()
-        # drop_list = [i for i in self.coords
-        #     if i not in self._coord_map.keys()]
-        # self.coords = self.coords.drop(drop_list)
 
-        for z in self._z_coords:
-            z = self._get_coord_name(z)
-            dz = self.coords[z].diff(z)
-            self.coords['d%s' % z] = dz
-
-        for y in self._y_coords:
-            y = self._get_coord_name(y)
-            dy = self.coords[y].diff(y)
-            self.coords['d%s' % y] = dy
-
-        for x in self._x_coords:
-            x = self._get_coord_name(x)
-            if self._x_periodic:
-                px = self.make_periodic_left(self.coords[x])
-                dx = px.diff(x)
+        for coord, attr in manifest.items():
+            label = attr['label']
+            # map labels e.g. `x_centre` to underlying dataset coordinate names.
+            self._coord_map[label] = coord
+            if attr['periodic']:
+                px = self.make_periodic_left(self.coords[coord])
+                dx = px.diff(coord)
             else:
-                dx = self.coords[x].diff(x)
-            self.coords['d%s' % x] = dx
-
+                dx = self.coords[coord].diff(coord)
+            self.coords['d%s' % coord] = dx
 
 
     def _get_hfac_for_array(self, array):
@@ -115,21 +99,39 @@ class GCMDataset(object):
 
     ### Horizontal differencing
 
-    def make_periodic_left(self, array, coord='x_centre'):
+    def is_periodic(self, coord):
+        coord = self._get_coord_name(coord)
+        if coord in self.manifest:
+            return self.manifest[coord].get('periodic', False)
+        else:
+            return False
+
+    def make_periodic_left(self, array, coord=None):
         """Add the rightmost "column" of data to the left of array.
         Parameters
         ----------
         array : xarray DataArray
             The array to make periodic.
-        coord : str, optional
-            The name of the x coordinate. Default: 'x_centre'
+        coord : str
+            The name of the periodic coordinate. Default: the only periodic coord on the array
 
         Returns
         -------
         periodic : xarray DataArray
-            Padded array with vertical coordinate zp1.
+            Array with periodic dimension extended by one data point.
         """
-        coord = self._get_coord_name(coord)
+        if coord is None:
+            pcoords = [c for c in array.coords if self.is_periodic(c)]
+            cs = set(pcoords).intersection(array.coords)
+            if len(cs) != 1:
+                raise ValueError('Array %r has no periodic coordinate (or more than one). Periodic Coords: %r.' % (array.name, cs))
+            else:
+                coord = cs.pop()
+        else:
+            coord = self._get_coord_name(coord)
+
+        if not self.is_periodic(coord):
+            raise ValueError("Coordinate %s is not periodic" % coord)
         coords, dims = self._get_coords_from_dims(array.dims)
 
         # get the last "column" of data
@@ -139,7 +141,7 @@ class GCMDataset(object):
         # make the coordinate an array if it isn't already
         xt.coords[coord] = np.atleast_1d(xt.coords[coord].data)
         # concat to the left
-        pt = xr.concat([xt, d.temp], dim=coord)
+        pt = xarray.concat([xt, array], dim=coord)
         # amend the new coordinate value (assume equal x spacing for now).
         pt[coord].values[0] = pt[coord].values[1] - pt[coord].values[2]
 
@@ -147,12 +149,20 @@ class GCMDataset(object):
 
 
     ### Vertical Differences, Derivatives, and Interpolation ###
+    def _dim_coords(self, dim):
+        """Return the names of coordinates that have the appropriate dimension.
+
+        e.g. For a gfdl dataset domain:
+        >>> dom._dim_coords('z')
+        {'phalf', 'pfull'}
+
+        Returns a set of coord names.
+        """
+        return set(v for k, v in self._coord_map.items() if k.startswith(dim))
 
     def get_vertical_coord_name(self, array):
         """Find the vertical coord this is aligned to."""
-        zs = self._z_coords.intersection(array.coords)
-        print(self._z_coords)
-        print([x for x in array.coords])
+        zs = self._dim_coords('z').intersection(array.coords)
         if len(zs) != 1:
             raise ValueError('Array %r has no vertical coordinate (or more than one) %r.' % (array.name, zs))
         return zs.pop()

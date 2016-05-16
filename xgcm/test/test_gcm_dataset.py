@@ -58,13 +58,13 @@ def test_dataset():
 
 #class TestMITDataset(unittest.TestCase):
 
-def test_create_gcm_dataset(test_dataset):
-    ds = test_dataset
-    gcm = MITDataset(ds)
-    # should fail if any of the variables is missing
-    for v in ds:
-        with pytest.raises(KeyError):
-            gcm = MITDataset(ds.drop(v))
+# def test_create_gcm_dataset(test_dataset):
+#     ds = test_dataset
+#     gcm = MITDataset(ds)
+#     # should fail if any of the variables is missing
+#     for v in ds:
+#         with pytest.raises(KeyError):
+#             gcm = MITDataset(ds.drop(v))
 
 # def test_periodic_left(test_dataset):
 #     ds = test_dataset

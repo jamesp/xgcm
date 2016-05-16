@@ -1,4 +1,5 @@
 from .gcm_dataset import GCMDataset
+from . import manifests
 from xgcm.util import append_to_name
 import xarray
 
@@ -25,6 +26,8 @@ class MITDataset(GCMDataset):
                     'drF', 'drC', 'dxC', 'dxG', 'dyC', 'dyG'}
 
 
+    def __init__(self, ds):
+        super(MITDataset, self).__init__(ds=ds, manifest=manifests.mitgcm)
 
     def pad_zl_to_zp1(self, array, fill_value=0., zlname='Zl', zp1name='Zp1'):
         """Pad an array located at zl points such that it is located at
