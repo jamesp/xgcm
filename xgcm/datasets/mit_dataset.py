@@ -8,7 +8,18 @@ class MITDataset(GCMDataset):
                    'XC', 'YC', 'XG', 'YG',
                    'drF', 'drC', 'dxC', 'dxG', 'dyC', 'dyG']
 
-    _vertical_coords = {'Z', 'Zp1', 'Zl', 'Zu'}
+    _coord_map = {
+        'z_centre': 'Z',
+        'z_edge': 'Zp1',
+        'x_centre': 'X',
+        'x_edge': 'Xp1',
+        'y_centre': 'Y',
+        'y_edge': 'Yp1'
+    }
+
+    _x_periodic = False
+
+    _z_coords = {'Z', 'Zp1', 'Zl', 'Zu'}
     _horiz_coords = {'X', 'Xp1', 'Y', 'Yp1',
                     'XC', 'YC', 'XG', 'YG',
                     'drF', 'drC', 'dxC', 'dxG', 'dyC', 'dyG'}

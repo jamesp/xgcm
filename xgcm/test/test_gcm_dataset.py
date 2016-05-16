@@ -66,6 +66,14 @@ def test_create_gcm_dataset(test_dataset):
         with pytest.raises(KeyError):
             gcm = MITDataset(ds.drop(v))
 
+# def test_periodic_left(test_dataset):
+#     ds = test_dataset
+#     dom = MITDataset(ds)
+#     ds['f'] = np.sin(np.pi * ds.X.values)
+#     ptemp = dom.make_periodic_left(ds.f, 'X')
+#     ((ptemp.sel(lon=ptemp.lon.min()) - ptemp.sel(lon=ptemp.lon.max())) == np.zeros_like(ptemp.isel(lon=1))).all().values
+
+
 def test_vertical_derivatives(test_dataset):
     ds = test_dataset
     H = ds.attrs['H']
@@ -143,3 +151,5 @@ def test_horizontal_derivatives(test_dataset):
     assert gcm_df.equals(ds.df), (gcm_df, ds.df)
     gcm_dg = gcm.diff_yp1_to_y(ds.g)
     assert gcm_dg.equals(ds.dg), (gcm_dg, ds.dg)
+
+
