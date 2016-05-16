@@ -3,7 +3,7 @@ gfdl = {
         'name': 'Latitude',
         'units': 'degrees N',
         'label': 'y_centre',
-        'periodic': False
+        'periodic': False,
     },
     'latb': {
         'name': 'Latitude (edges)',
@@ -16,12 +16,14 @@ gfdl = {
         'units': 'degrees E',
         'label': 'x_centre',
         'periodic': True
+#        'diff_fn': _dlon,
     },
     'lonb': {
         'name': 'Longitude (edges)',
         'units': 'degrees E',
         'label': 'x_centre',
         'periodic': True
+#        'diff_fn': _dlon,
     },
     'pfull': {
         'name': 'Pressure',

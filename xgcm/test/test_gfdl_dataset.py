@@ -39,3 +39,27 @@ def test_periodic_left(gfdl_datadir):
     ptemp = dom.make_periodic_left(ds.temp)
     assert len(ptemp.coords['lon']) == 129
     assert np.all(ptemp.isel(lon=0) == ptemp.isel(lon=-1))
+
+def test_vertical_diff(gfdl_datadir):
+    ds = xr.open_dataset(os.path.join(gfdl_datadir, 'test_gfdl.nc'), decode_times=False)
+    dom = GCMDataset(ds)
+    # fake a constant lapse rate from surface temp upwards
+    lapse_rate = 10.0
+    ds['const_lapse'] = (ds.temp.sel(pfull=ds.pfull.max())
+                            - lapse_rate*(ds.pfull))
+    dTdz = dom.diff(ds.const_lapse, 'z')
+    assert np.allclose(ds.const_lapse.diff('pfull') / ds.pfull.diff('pfull'), -lapse_rate)
+
+def test_multiple_dim_coords(gfdl_datadir):
+    ds = xr.open_dataset(os.path.join(gfdl_datadir, 'test_gfdl.nc'), decode_times=False)
+    dom = GCMDataset(ds)
+    ds['single_height'] = ds.pfull * 100.0
+    assert dom.get_primary_dim_coord_name('z', ds.single_height) == 'pfull'
+
+    ds['double_height'] = (ds.pfull + ds.phalf)
+    with pytest.raises(ValueError):
+        dom.get_primary_dim_coord_name('z', ds.double_height)
+
+    ds['no_height'] = ds.lat * 30.0
+    with pytest.raises(ValueError):
+        dom.get_primary_dim_coord_name('z', ds.no_height)

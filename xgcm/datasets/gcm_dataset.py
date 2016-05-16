@@ -19,9 +19,6 @@ class GCMDataset(object):
     grid information, and operations related to finite-volume analysis.
     """
     _coord_map = {}
-    _y_coords = set()
-    _x_coords = set()
-    _z_coords = set()
 
     def __init__(self, ds, manifest=None):
         """Initialize GCM object.
@@ -51,13 +48,16 @@ class GCMDataset(object):
             label = attr['label']
             # map labels e.g. `x_centre` to underlying dataset coordinate names.
             self._coord_map[label] = coord
-            if attr['periodic']:
-                px = self.make_periodic_left(self.coords[coord])
-                dx = px.diff(coord)
+            if attr.get('diff_fn'):
+                # delegate calculation of dx to a function
+                dx = attr['diff_fn'](self)
             else:
-                dx = self.coords[coord].diff(coord)
+                if attr['periodic']:
+                    px = self.make_periodic_left(self.coords[coord])
+                    dx = px.diff(coord)
+                else:
+                    dx = self.coords[coord].diff(coord)
             self.coords['d%s' % coord] = dx
-
 
     def _get_hfac_for_array(self, array):
         """Figure out the correct hfac given array dimensions."""
@@ -167,6 +167,14 @@ class GCMDataset(object):
             raise ValueError('Array %r has no vertical coordinate (or more than one) %r.' % (array.name, zs))
         return zs.pop()
 
+    def get_primary_dim_coord_name(self, dim, array):
+        zs = self._dim_coords(dim).intersection(array.coords)
+        if len(zs) == 0:
+            raise ValueError('Array %r has no coordinate in the %s direction.' % (array.name, dim))
+        elif len(zs) > 1:
+            raise ValueError('Array %r has more than one coordinate in the %s direction: %r.' % (array.name, dim, zs))
+        return zs.pop()
+
     def pad_vertical(self, array, fill_value=0.0, new_coord=None):
         """Pad an array located to be aligned to a different set
         of vertical coordinates.
@@ -222,3 +230,32 @@ class GCMDataset(object):
             return newarray.chunk({new_coord: len(newarray[new_coord])})
         else:
             return newarray
+
+    def diff(self, array, dim, coord=None):
+        """Differentiate array in a given dimension using finite differences.
+
+        Parameters
+        ----------
+        array : xarray DataArray
+            The array to difference.
+        dim : str {'x', 'y', 'z'}
+            The direction to take the derivative.
+        coord: str, optional
+            The coordinate to use.  If there is only one coordinate for
+            the chosen dimension this is optional.
+
+        Returns
+        -------
+        derivative : xarray DataArray
+            An array containing the derivative with ndim-1 values in the
+            differentiated direction.
+
+        """
+        if coord is None:
+            coord = self.get_primary_dim_coord_name(dim, array)
+
+        dphi = array.diff(coord)
+        return dphi / self.coords['d%s' % coord]
+
+
+
